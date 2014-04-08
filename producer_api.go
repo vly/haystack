@@ -12,7 +12,7 @@ import (
 
 // LogFile passes logging messages to a flatfile
 func LogFile(message string) {
-	f, err := os.OpenFile("ping_messages.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile("haystack_producer_messages.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Printf("error opening file: %v", err)
 	}
