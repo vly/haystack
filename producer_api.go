@@ -1,6 +1,7 @@
 package haystack
 
 import (
+	"fmt"
 	"github.com/codegangsta/martini"
 	kinesis "github.com/sendgridlabs/go-kinesis"
 	"io/ioutil"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 // LogFile passes logging messages to a flatfile
@@ -22,11 +24,6 @@ func LogFile(message string) {
 	log.Println(message)
 }
 
-// LogStream is the dogfood function that
-func LogStream(message string) {
-	// something
-}
-
 // generate a dictionary from passed params
 func GenDict(data []string) map[string]string {
 	r_map := make(map[string]string)
@@ -38,7 +35,6 @@ func GenDict(data []string) map[string]string {
 		}
 		r_map[x[0]] = answer
 	}
-
 	return r_map
 }
 
@@ -47,11 +43,13 @@ func PassQuery(stream string, message string) (ok bool) {
 	return true
 }
 
+// Authentication key struct
 type Keys struct {
 	AccessKey string
 	SecretKey string
 }
 
+// SetEnv stores keys as environment vars
 func (k *Keys) SetEnv() {
 	err := os.Setenv("AWS_ACCESS_KEY", k.AccessKey)
 	err = os.Setenv("AWS_SECRET_KEY", k.SecretKey)
@@ -60,30 +58,32 @@ func (k *Keys) SetEnv() {
 	}
 }
 
-func loadTokens(key *Keys) {
-	log.Println("Loading tokens")
+// loadTokens imports auth keys from rootkey.csv (AWS keyset)
+func loadTokens(key *Keys) bool {
 	if tokens, err := ioutil.ReadFile("rootkey.csv"); err == nil {
 		temp := strings.Split(string(tokens), "\n")
 		if len(temp) == 2 {
 			key.AccessKey = strings.SplitAfter(temp[0], "=")[1]
-			key.AccessKey = key.AccessKey[:len(key.AccessKey)-1]
 			key.SecretKey = strings.SplitAfter(temp[1], "=")[1]
-			return
+			return true
 		}
 	}
-	log.Fatalln("Error loading tokens from rootkey.csv")
-	return
+	log.Println("Error loading tokens from rootkey.csv")
+	return false
 }
 
+// InitKinesis initialises a connection to the Kinesis service
 func InitKinesis() (*kinesis.Kinesis, bool) {
 	k := new(Keys)
-	loadTokens(k)
-	ksis := kinesis.New(k.AccessKey, k.SecretKey)
-
-	return ksis, true
+	if ok := loadTokens(k); ok {
+		ksis := kinesis.New(k.AccessKey, k.SecretKey)
+		return ksis, true
+	}
+	return nil, false
 }
 
-func CheckStreams(k *kinesis.Kinesis, streamname string) bool {
+// CheckStream verifies whether a stream already exists
+func CheckStream(k *kinesis.Kinesis, streamname string) bool {
 	args := kinesis.NewArgs()
 	args.Add("StreamName", streamname)
 	temp, err := k.ListStreams(args)
@@ -98,18 +98,80 @@ func CheckStreams(k *kinesis.Kinesis, streamname string) bool {
 		}
 	}
 	return false
-
 }
 
-func Init() {
+// CreateStream creates a new stream
+func CreateStream(k *kinesis.Kinesis, tempStreamName string, shards int) bool {
+	if err := k.CreateStream(tempStreamName, shards); err != nil {
+		return false
+	}
+
+	// wait for Stream ready state
+	timeout := make(chan bool, 30)
+	resp := &kinesis.DescribeStreamResp{}
+	log.Printf("Waiting for stream to be created")
+	for {
+		args := kinesis.NewArgs()
+		args.Add("StreamName", tempStreamName)
+		resp, _ = k.DescribeStream(args)
+		log.Printf(".")
+
+		if resp.StreamDescription.StreamStatus != "ACTIVE" {
+			time.Sleep(4 * time.Second)
+			timeout <- true
+		} else {
+			break
+		}
+	}
+
+	return true
+}
+
+// DeleteStream deletes an existing stream
+func DeleteStream(k *kinesis.Kinesis, streamName string) bool {
+	if err := k.DeleteStream(streamName); err == nil {
+		return true
+	}
+	return false
+}
+
+// SendMessage generates a new JSON blob and sends to a stream
+func SendMessage(k *kinesis.Kinesis, streamName string, msg *Message, comms chan bool) {
+	args := kinesis.NewArgs()
+	args.Add("StreamName", streamName)
+	args.Add("PartitionKey", fmt.Sprintf("partitionKey-%d", 1))
+	if data, ok := msg.ToJSON(); ok {
+		args.AddData(data)
+		if _, err := k.PutRecord(args); err == nil {
+			comms <- true
+			return
+		}
+	}
+	log.Println("Failed to send message")
+	comms <- false
+	return
+}
+
+// ServerInit launches the Producer endpoint
+// ...need to figure out how to do graceful shutdown.
+func ServerInit(quit chan bool) {
 	// Init main handler of RESTful endpoints
 	m := martini.Classic()
 
 	// Init Kinesis comms object
+	streamName := "testStream"
 	k, ok := InitKinesis()
 	if !ok {
-		log.Fatalln("Could not init connect")
+		log.Fatalln("Could not init connection to Kinesis server")
 	}
+	// check if stream exists, create if not
+	if test := CheckStream(k, streamName); !test {
+		if ok := CreateStream(k, streamName, 1); !ok {
+			log.Fatalln("Failed to create stream.")
+		}
+	}
+	// make a buffered comms channel
+	ch := make(chan bool, 100)
 
 	// Process message passed via GET request
 	m.Get("/log", func(res http.ResponseWriter, r *http.Request) (int, string) {
@@ -124,15 +186,17 @@ func Init() {
 			log.Println("d: " + b)
 		}
 
-		// check if stream exists, create new one if it doesn't
-		if ok := CheckStreams(k, data[0]); !ok {
-			if err := k.CreateStream(data[0], 1); err != nil {
-				log.Fatalln("Error creating new stream.")
-			}
-		}
+		tempMessage := &Message{
+			data[0],                  // uid
+			"test.com/testpage.html", // ref site
+			time.Now().String(),      // timestamp
+			"Pageview",               // event type
+			fmt.Sprintf("{'data': %s}", data[1])}
+
+		go SendMessage(k, streamName, tempMessage, ch)
 
 		res.Header().Set("Content-Type", "application/json")
-		return 200, "{}"
+		return 200, "{'status': 'ok'}"
 	})
 
 	m.Patch("/", func() {
@@ -172,8 +236,16 @@ func Init() {
 	})
 
 	//m.Run()
-	err := http.ListenAndServe(":5001", m)
+	err := http.ListenAndServe(":5004", m)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// quit if told to
+	// have a feeling this won't work
+	select {
+	case <-quit:
+
+		return
 	}
 }
