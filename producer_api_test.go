@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	tempStreamName string = "RANDOM_TEST"
+	tempStreamName string = "PRODUCER_TEST"
 )
 
 // initialise connection to Kinesis instance
@@ -71,7 +71,7 @@ func TestSendMessage(t *testing.T) {
 
 }
 
-// delete stream
+delete stream
 func TestDeleteStream(t *testing.T) {
 	if k, ok := InitKinesis(); ok {
 		if ok := DeleteStream(k, tempStreamName); ok {

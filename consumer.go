@@ -3,36 +3,59 @@ package haystack
 import (
 	"fmt"
 	kinesis "github.com/sendgridlabs/go-kinesis"
+	"log"
 )
 
-func GetMessages(k *kinesis.Kinesis, streamName string) ([]byte, bool) {
+func GetShardIterator(k *kinesis.Kinesis, streamName string, shardId string) string {
 	args := kinesis.NewArgs()
 	args.Add("StreamName", streamName)
-	args.Add("ShardId", "000000000000")
+	args.Add("ShardId", shardId)
 	args.Add("ShardIteratorType", "TRIM_HORIZON")
+	a, _ := k.GetShardIterator(args)
+	return a.ShardIterator
+}
+
+func GetMessages(k *kinesis.Kinesis, streamName string) (out [][]byte, ok bool) {
+	shardIterator := GetShardIterator(k, streamName, "shardId-000000000000")
+	args := kinesis.NewArgs()
+	args.Add("ShardIterator", shardIterator) // only one shard at the moment
 	if resp, err := k.GetRecords(args); err == nil {
 		fmt.Println(resp)
-		resp10, _ := k.GetShardIterator(args)
-		shardIterator := resp10.ShardIterator
+
 		for {
 			args = kinesis.NewArgs()
 			args.Add("ShardIterator", shardIterator)
-			resp11, err := k.GetRecords(args)
-
-			if len(resp11.Records) > 0 {
-				fmt.Printf("GetRecords Data BEGIN\n")
-				for _, d := range resp11.Records {
+			recordResp, err := k.GetRecords(args)
+			if len(recordResp.Records) > 0 {
+				for _, d := range recordResp.Records {
 					res, err := d.GetData()
+					if err != nil {
+						LogFile(err.Error())
+					}
 					fmt.Printf("GetRecords Data: %v, err: %v\n", string(res), err)
+					out = append(out, res)
 				}
-				fmt.Printf("GetRecords Data END\n")
-			} else if resp11.NextShardIterator == "" || shardIterator == resp11.NextShardIterator || err != nil {
-				fmt.Printf("GetRecords ERROR: %v\n", err)
+			} else if recordResp.NextShardIterator == "" || shardIterator == recordResp.NextShardIterator || err != nil {
+				LogFile(fmt.Sprintf("GetRecords ERROR: %v\n", err))
 				break
 			}
 
-			shardIterator = resp11.NextShardIterator
+			shardIterator = recordResp.NextShardIterator
 		}
+	} else {
+		log.Println(err.Error())
 	}
-	return []byte(""), true
+	return out, true
+}
+
+// StoreRecords is an example of a local store
+func StoreRecords(records []byte) bool {
+	return true
+}
+
+// PrintRecords
+func PrintRecords(records [][]byte) {
+	for a, b := range records {
+		log.Printf("%d: %s\n", a, string(b))
+	}
 }
