@@ -43,10 +43,8 @@ func TestPrint(t *testing.T) {
 			t.Fail()
 			return
 		}
-		fmt.Println("Here")
 
-		if data, ok := GetMessages(k, StreamName); ok {
-			log.Printf("Received back: %v\n", data)
+		if data, ok := GetMessages(k, StreamName, "shardId-000000000000"); ok {
 			PrintRecords(data)
 
 		} else {
@@ -58,11 +56,8 @@ func TestPrint(t *testing.T) {
 
 // TestGetMessages attempts to retrieve all messages in the test stream
 func TestGetMessages(t *testing.T) {
-	fmt.Printf("%s: Starting message retrieval\n", time.Now().String())
 	if k, ok := InitKinesis(); ok {
-		if data, ok := GetMessages(k, StreamName); ok {
-			log.Printf("received %v\n", data)
-		} else {
+		if _, ok := GetMessages(k, StreamName, "shardId-000000000000"); !ok {
 			log.Println("Failed to retrieve messages from stream")
 			t.Fail()
 		}

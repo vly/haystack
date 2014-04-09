@@ -1,7 +1,6 @@
 package haystack
 
 import (
-	"fmt"
 	kinesis "github.com/sendgridlabs/go-kinesis"
 	"log"
 )
@@ -15,35 +14,32 @@ func GetShardIterator(k *kinesis.Kinesis, streamName string, shardId string) str
 	return a.ShardIterator
 }
 
-func GetMessages(k *kinesis.Kinesis, streamName string) (out [][]byte, ok bool) {
-	shardIterator := GetShardIterator(k, streamName, "shardId-000000000000")
-	args := kinesis.NewArgs()
-	args.Add("ShardIterator", shardIterator) // only one shard at the moment
-	if resp, err := k.GetRecords(args); err == nil {
-		fmt.Println(resp)
+func GetMessages(k *kinesis.Kinesis, streamName string, shardID string) (out [][]byte, ok bool) {
+	shardIterator := GetShardIterator(k, streamName, shardID)
 
-		for {
-			args = kinesis.NewArgs()
-			args.Add("ShardIterator", shardIterator)
-			recordResp, err := k.GetRecords(args)
+	for {
+		args := kinesis.NewArgs()
+		args.Add("ShardIterator", shardIterator)
+		recordResp, err := k.GetRecords(args)
+		if err == nil {
+
 			if len(recordResp.Records) > 0 {
 				for _, d := range recordResp.Records {
 					res, err := d.GetData()
 					if err != nil {
 						LogFile(err.Error())
 					}
-					fmt.Printf("GetRecords Data: %v, err: %v\n", string(res), err)
+					//fmt.Printf("GetRecords Data: %v, err: %v\n", string(res), err)
 					out = append(out, res)
 				}
-			} else if recordResp.NextShardIterator == "" || shardIterator == recordResp.NextShardIterator || err != nil {
-				LogFile(fmt.Sprintf("GetRecords ERROR: %v\n", err))
+			} else {
+
 				break
 			}
-
-			shardIterator = recordResp.NextShardIterator
 		}
-	} else {
-		log.Println(err.Error())
+
+		shardIterator = recordResp.NextShardIterator
+
 	}
 	return out, true
 }
