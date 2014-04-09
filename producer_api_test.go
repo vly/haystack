@@ -71,7 +71,7 @@ func TestSendMessage(t *testing.T) {
 
 }
 
-// delete stream
+delete stream
 func TestDeleteStream(t *testing.T) {
 	if k, ok := InitKinesis(); ok {
 		if ok := DeleteStream(k, tempStreamName); ok {
