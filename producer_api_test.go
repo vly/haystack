@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	tempStreamName string = "RANDOM_TEST"
+	tempStreamName string = "PRODUCER_TEST"
 )
 
 // initialise connection to Kinesis instance
