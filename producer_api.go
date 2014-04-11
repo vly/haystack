@@ -2,7 +2,8 @@ package haystack
 
 import (
 	"fmt"
-	"github.com/codegangsta/martini"
+	"github.com/go-martini/martini"
+	"github.com/martini-contrib/binding"
 	kinesis "github.com/sendgridlabs/go-kinesis"
 	"io/ioutil"
 	"log"
@@ -204,17 +205,19 @@ func ServerInit(quit chan bool) {
 	})
 
 	// Process message passed via POST request
-	m.Post("/log", func(r *http.Request, res http.ResponseWriter) (int, string) {
-		if err := r.ParseForm(); err != nil {
-			log.Printf("%s", "nothing posted")
-		}
-		data_values := make(map[string]string)
-		for a, b := range r.Form {
-			data_values[a] = b[0]
-		}
+	m.Post("/log", binding.Json(Message{}), binding.ErrorHandler, func(attrib Message, params martini.Params, r *http.Request, res http.ResponseWriter) (int, string) {
+		// if err := r.ParseForm(); err != nil {
+		// 	log.Printf("%s", "nothing posted")
+		// }
+		fmt.Println(attrib)
+		// data_values := make(map[string]string)
+		// for a, b := range r.Form {
+		// 	data_values[a] = b[0]
+		// }
 		res.Header().Set("Content-Type", "application/json")
 		// SubmitTicket(data_values)
-		return 200, "{}"
+		out, _ := attrib.ToJSON()
+		return 200, string(out)
 	})
 
 	m.Put("/", func() {

@@ -12,11 +12,11 @@ const (
 // Message represents the clickstream
 // data to be passed to a stream.
 type Message struct {
-	Uid       string // user ID
-	Ref       string // referral site
-	Timestamp string // timestamp
-	EventType string // type of event
-	Data      string // data blob
+	Uid       string `json:"cid"`       // user ID
+	Ref       string `json:"ref"`       // referral site
+	EventType string `json:"type"`      // type of event
+	Data      string `json:"context"`   // data blob
+	Timestamp string `json:"timestamp"` // timestamp
 }
 
 // ToJSON marshalls the Message struct into a JSON blob
