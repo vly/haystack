@@ -1,0 +1,26 @@
+<html>
+	<head>
+		<title>Haystack demo page</title>
+		<script type="text/javascript">
+			window.haystack = window.haystack || [];
+			haystack.load = function (uID) {
+			    window._hstkID = uID;
+			    var elem = document.createElement("script");
+			    elem.type = "text/javascript", elem.async = !0, elem.src = ("https:" === document.location.protocol ? "https:" : "http:") + "//localhost:8000/haystack.js";
+			    var firstScript = document.getElementsByTagName("script")[0];
+			    firstScript.parentNode.insertBefore(elem, firstScript);
+			    var d = function (uID) {
+			        return function () {
+			            haystack.push([uID].concat(Array.prototype.slice.call(arguments, 0)))
+			        }
+			    }, e = ["identify", "track"];
+			    for (var f = 0; f < e.length; f++) haystack[e[f]] = d(e[f])
+			};
+			haystack.load("12345");
+		</script>
+	</head>
+	<body>
+		<h1>Haystack demo</h1>
+		<a href="#hi">Anchor link</a>
+	</body>
+</html>

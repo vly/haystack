@@ -13,6 +13,9 @@ Pull requests welcome!
 ### AWS Authentication
 In order to authenticate with your Kinesis instance, create a new key, download as a csv (rootkey.csv), and place in application root.
 
+### Sample Producer
+` curl -X POST -d '{"cid": "12345", "type": "pageview", "ref": "http://localhost/test.html", "context": ""}' http://localhost:5004/log`
+
 ### Dependencies
 
 - Using Sendgridlab's kinesis library: [https://github.com/sendgridlabs/go-kinesis](https://github.com/sendgridlabs/go-kinesis)
