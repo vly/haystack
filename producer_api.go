@@ -13,6 +13,11 @@ import (
 	"time"
 )
 
+// Base struct for Haystack producer
+type Producer struct {
+	Conn *kinesis.Kinesis
+}
+
 // LogFile passes logging messages to a flatfile
 func LogFile(message string) {
 	f, err := os.OpenFile("haystack_producer_messages.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
